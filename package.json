@@ -1,0 +1,19 @@
+{
+  "name": "youtube-thumb",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "ts-node-dev ./src/index.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.8.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.2.2"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "googleapis": "^126.0.1",
+    "puppeteer-core": "https://github.com/seanaye/puppeteer/releases/download/v5.5.0-apple-silicon/puppeteer-core-5.5.0-post.tgz"
+  }
+}
