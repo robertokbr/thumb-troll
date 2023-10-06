@@ -1,10 +1,14 @@
-const puppeteer = require("puppeteer-core");
-
 const generateImageFromHTML = async (htmlString, outputFilePath) => {
-    const browser = await puppeteer.launch({
-        executablePath: '/Applications/Chromium.app/Contents/MacOS/Chromium',
-        headless: false
-    });
+    let browser;
+
+    if (process.env.IS_MAC_M1) {
+         browser = await require("puppeteer-core").launch({
+            executablePath: '/Applications/Chromium.app/Contents/MacOS/Chromium',
+            headless: false
+        });
+    } else {
+        browser = await require("puppeteer").launch();
+    }
 
     const page = await browser.newPage();
     
