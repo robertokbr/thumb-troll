@@ -1,4 +1,6 @@
 import 'dotenv/config';
-import { updateThumb } from "./update-thumb";
+import { UpdateThumb } from "./update-thumb";
+
+const updateThumb = new UpdateThumb();
 
 updateThumb.execute();
