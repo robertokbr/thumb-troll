@@ -1,10 +1,16 @@
-import { google } from 'googleapis';
+import { google, youtube_v3 } from 'googleapis';
 import path from 'node:path';
 import generateImageFromHTML from './utils/gen-image.js';
 import { renderHTML } from './utils/render-html';
 import fs from 'node:fs';
 import { OAuth2Client } from 'google-auth-library';
 import { GetGoogleOAuthToken } from './get-google-oauth-token';
+import { UploadToS3 } from './upload-to-s3';
+
+type Comment = {
+    author: string;
+    comment: string;
+}
 
 type YouTubeComment = {
     textDisplay: string;
@@ -16,13 +22,16 @@ export class UpdateThumb {
     private readonly TOKEN_PATH = path.resolve(__dirname, '../google-token.json');
     private readonly VIDEO_TITLE = process.env.VIDEO_TITLE as string;
     private readonly VIDEO_ID = process.env.VIDEO_ID as string;
+    private readonly COMMENTS_PATH = path.resolve(__dirname, '../comments.json');
     private readonly MAX_RESULTS = 50;
     private readonly oAuth2Client: OAuth2Client;
 
     private currentComment = '';
-    private getAccessToken = new GetGoogleOAuthToken()
     private categoryId = '';
     private currentTitle = '';
+
+    private getAccessToken = new GetGoogleOAuthToken()
+    private uploadToS3 = new UploadToS3();
 
     constructor(){
         const credentials = require(path.resolve(__dirname, '../google-cred.json'));
@@ -45,6 +54,48 @@ export class UpdateThumb {
         }
     }
 
+    private removeFromStringCharactersThatCanCauseProblems(str: string) {
+        return str.replace(/[^a-zA-Z0-9]/g, '');
+    }
+
+    private async getCommentToUse(data: youtube_v3.Schema$CommentThread[] | undefined) {
+        if (!data) {
+            return;
+        }
+
+        const comments = path.resolve(this.COMMENTS_PATH);
+
+        const commentsBuffer = await fs.promises.readFile(comments).catch(() => {
+            return Buffer.from('[]');
+        });
+
+        const commentsJSON = JSON.parse(commentsBuffer.toString()) as Comment[];
+
+        const currentComment = data.filter(c =>
+            c.snippet?.topLevelComment?.snippet?.authorDisplayName !== 'Bero'
+        ).reverse().find((comment) => {
+            const commentAuthor = comment.snippet?.topLevelComment?.snippet?.authorDisplayName as string;
+            const commentContent = comment.snippet?.topLevelComment?.snippet?.textDisplay as string;
+
+            const alreadyCommented = commentsJSON.find((comment) => {
+                return comment.author === commentAuthor && comment.comment === commentContent;
+            });
+
+            return !alreadyCommented;
+        });
+
+        if (currentComment) {
+            commentsJSON.push({
+                author: currentComment.snippet?.topLevelComment?.snippet?.authorDisplayName as string,
+                comment: currentComment.snippet?.topLevelComment?.snippet?.textDisplay as string,
+            });
+
+            await fs.promises.writeFile(comments, JSON.stringify(commentsJSON));
+        }
+
+        return currentComment;
+    }
+
     private async uploadThumbnail() {
         await this.setToken();
 
@@ -65,9 +116,7 @@ export class UpdateThumb {
 
         const {
             commentCount,
-            likeCount,
-            viewCount,
-         } = response.data.items?.[0].statistics as any;
+        } = response.data.items?.[0].statistics as any;
 
         if (!this.categoryId) {
             const category = await youtube.videoCategories.list({
@@ -78,7 +127,7 @@ export class UpdateThumb {
             this.categoryId = category.data.items?.[0].id as string;
         }
 
-        const title = `Esse vídeo tem ${commentCount} comentários, ${likeCount} likes e ${viewCount} visualizações! `;
+        const title = this.VIDEO_TITLE + ` Ele já tem ${commentCount} comentários feitos por insolentes`;
 
         if (title !== this.currentTitle) {
             this.currentTitle = title;
@@ -95,10 +144,17 @@ export class UpdateThumb {
                 },
             });
 
-            console.log('Video title updated successfully:', videoResponse.data);
+            console.log('Video title updated successfully:', videoResponse, new Date());
         }
 
-        let lastComment: YouTubeComment = commentsResponse.data.items?.[1].snippet?.topLevelComment?.snippet as any;
+        const newComment = await this.getCommentToUse(commentsResponse.data.items);
+
+        if (!newComment) {
+            console.info('No new comments found.', new Date());
+            return;
+        }
+
+        const lastComment = newComment.snippet?.topLevelComment?.snippet as YouTubeComment;
 
         if (lastComment.authorDisplayName === this.currentComment) {
             console.info('Thumbnail already updated.');
@@ -107,7 +163,9 @@ export class UpdateThumb {
 
         this.currentComment = lastComment.authorDisplayName;
 
-        let imagePath = path.resolve(__dirname, `../tmp/${lastComment.authorDisplayName}-last-comment.png`)
+        let imagePath = path.resolve(__dirname, `../tmp/${
+            this.removeFromStringCharactersThatCanCauseProblems(lastComment.authorDisplayName)
+        }-last-comment.png`)
 
         const htmlString = renderHTML({
             comment: lastComment.textDisplay,
@@ -118,11 +176,20 @@ export class UpdateThumb {
         await generateImageFromHTML(htmlString, imagePath);
 
         try {
+            await this.uploadToS3.execute(imagePath, `${
+                this.removeFromStringCharactersThatCanCauseProblems(lastComment.authorDisplayName)
+            }-last-comment.png`);
+            console.log('Image uploaded successfully');
+        }  catch (error) {
+            console.error('Error generating image from HTML:', error);
+        }
+
+        try {
             console.log('Updating thumbnail...');
 
             const body = await fs.promises.readFile(imagePath);
 
-            const thumbnailResponse = await youtube.thumbnails.set({
+            await youtube.thumbnails.set({
                 videoId: process.env.VIDEO_ID,
                 media: {
                     mimeType: 'image/png',
@@ -130,10 +197,10 @@ export class UpdateThumb {
                 },
             });
 
-            console.log('Thumbnail updated successfully:', thumbnailResponse.data);
+            console.log('Thumbnail updated successfully:', new Date());
 
         } catch (error) {
-            console.error('Error updating thumbnail:', error);
+            console.error('Error updating thumbnail', new Date());
         }
     }
 
@@ -142,7 +209,7 @@ export class UpdateThumb {
 
         setTimeout(() => {
             this.execute();
-        }, 1000 * 60 * 2);
+        }, 1000 * 60 * 5);
     }
 }
 
