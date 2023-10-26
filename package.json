@@ -4,7 +4,9 @@
   "main": "index.js",
   "license": "MIT",
   "scripts": {
-    "start": "ts-node-dev ./src/index.ts"
+    "start:dev": "ts-node-dev ./src/index.ts",
+    "build": "tsc -p .",
+    "start": "node ./dist/index.js"
   },
   "devDependencies": {
     "@types/node": "^20.8.2",

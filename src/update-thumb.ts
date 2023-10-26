@@ -5,7 +5,6 @@ import { renderHTML } from './utils/render-html';
 import fs from 'node:fs';
 import { OAuth2Client } from 'google-auth-library';
 import { GetGoogleOAuthToken } from './get-google-oauth-token';
-import { UploadToS3 } from './upload-to-s3';
 
 type Comment = {
     author: string;
@@ -23,7 +22,6 @@ export class UpdateThumb {
     private readonly VIDEO_TITLE = process.env.VIDEO_TITLE as string;
     private readonly VIDEO_ID = process.env.VIDEO_ID as string;
     private readonly COMMENTS_PATH = path.resolve(__dirname, '../comments.json');
-    private readonly MAX_RESULTS = 50;
     private readonly oAuth2Client: OAuth2Client;
 
     private currentComment = '';
@@ -31,7 +29,6 @@ export class UpdateThumb {
     private currentTitle = '';
 
     private getAccessToken = new GetGoogleOAuthToken()
-    private uploadToS3 = new UploadToS3();
 
     constructor(){
         const credentials = require(path.resolve(__dirname, '../google-cred.json'));
@@ -59,9 +56,7 @@ export class UpdateThumb {
     }
 
     private async getCommentToUse(data: youtube_v3.Schema$CommentThread[] | undefined) {
-        if (!data) {
-            return;
-        }
+        if (!data) return;
 
         const comments = path.resolve(this.COMMENTS_PATH);
 
@@ -144,7 +139,7 @@ export class UpdateThumb {
                 },
             });
 
-            console.log('Video title updated successfully:', videoResponse, new Date());
+            console.debug('Video title updated successfully', new Date());
         }
 
         const newComment = await this.getCommentToUse(commentsResponse.data.items);
@@ -176,16 +171,7 @@ export class UpdateThumb {
         await generateImageFromHTML(htmlString, imagePath);
 
         try {
-            await this.uploadToS3.execute(imagePath, `${
-                this.removeFromStringCharactersThatCanCauseProblems(lastComment.authorDisplayName)
-            }-last-comment.png`);
-            console.log('Image uploaded successfully');
-        }  catch (error) {
-            console.error('Error generating image from HTML:', error);
-        }
-
-        try {
-            console.log('Updating thumbnail...');
+            console.debug('Updating thumbnail...');
 
             const body = await fs.promises.readFile(imagePath);
 
@@ -197,7 +183,7 @@ export class UpdateThumb {
                 },
             });
 
-            console.log('Thumbnail updated successfully:', new Date());
+            console.debug('Thumbnail updated successfully:', new Date());
 
         } catch (error) {
             console.error('Error updating thumbnail', new Date());
@@ -209,7 +195,7 @@ export class UpdateThumb {
 
         setTimeout(() => {
             this.execute();
-        }, 1000 * 60 * 5);
+        }, 1000 * 60 * 10);
     }
 }
 
