@@ -1,7 +1,7 @@
 const generateImageFromHTML = async (htmlString, outputFilePath) => {
     let browser;
 
-    if (process.env.IS_MAC_M1) {
+    if (process.env.IS_MAC_M1 === "true") {
         browser = await require("puppeteer-core").launch({
             executablePath: '/Applications/Chromium.app/Contents/MacOS/Chromium',
             headless: false
