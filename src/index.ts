@@ -1,6 +1,6 @@
 import 'dotenv/config';
-import { UpdateThumb } from "./update-thumb";
+import { UpdateVideoTitle } from "./update-title";
 
-const updateThumb = new UpdateThumb();
+const updateVideoTitle = new UpdateVideoTitle();
 
-updateThumb.execute();
+updateVideoTitle.execute();

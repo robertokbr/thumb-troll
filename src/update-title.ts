@@ -16,7 +16,7 @@ type YouTubeComment = {
     authorProfileImageUrl: string;
 }
 
-export class UpdateThumb {
+export class UpdateVideoTitle {
     private readonly TOKEN_PATH = path.resolve(__dirname, '../google-token.json');
     private readonly VIDEO_ID = process.env.VIDEO_ID as string;
     private readonly COMMENTS_PATH = path.resolve(__dirname, '../comments.json');
